@@ -14,13 +14,13 @@ Claude always shows you the exact changes and asks before it writes anything to 
 ## Install
 
 ### Claude desktop, Cowork and claude.ai
-1. Go to **Customize → Plugins → Add marketplace** and enter `https://github.com/<org>/flik-claude-plugin`.
+1. Go to **Customize → Plugins → Add marketplace** and enter `https://github.com/miflik/flik-claude-plugin`.
 2. Install **Flik POS**.
 3. Open the plugin's **Connectors** tab, click **Connect** on Flik and sign in with your Flik account.
 
 ### Claude Code
 ```
-/plugin marketplace add <org>/flik-claude-plugin
+/plugin marketplace add miflik/flik-claude-plugin
 /plugin install flik@flik
 /mcp        # select plugin:flik:flik → Authenticate
 ```
