@@ -1,0 +1,13 @@
+{
+  "name": "flik",
+  "displayName": "Flik POS",
+  "version": "0.1.0",
+  "description": "Manage and optimize your Flik point-of-sale business from Claude: sales and profit reports, stock and reordering, pricing and margins, and client debt (fiado).",
+  "author": {
+    "name": "Flik",
+    "url": "https://miflik.com"
+  },
+  "homepage": "https://miflik.com",
+  "license": "MIT",
+  "keywords": ["pos", "point-of-sale", "retail", "inventory", "argentina", "flik", "punto-de-venta"]
+}

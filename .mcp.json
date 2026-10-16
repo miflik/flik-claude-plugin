@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "flik": {
+      "type": "http",
+      "url": "https://miflik.com/api/mcp"
+    }
+  }
+}

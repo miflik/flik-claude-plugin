@@ -1,0 +1,16 @@
+{
+  "name": "flik",
+  "description": "Official Flik POS plugin for Claude: manage and optimize your point-of-sale business.",
+  "owner": {
+    "name": "Flik",
+    "url": "https://miflik.com"
+  },
+  "plugins": [
+    {
+      "name": "flik",
+      "displayName": "Flik POS",
+      "description": "Manage and optimize your Flik point-of-sale business from Claude.",
+      "source": "./"
+    }
+  ]
+}
