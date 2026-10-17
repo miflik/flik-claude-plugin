@@ -8,8 +8,9 @@ Manage and optimize your [Flik](https://miflik.com) point-of-sale business by ta
 | "¿Qué tengo que reponer?" / "Cargá este remito" | Reorder list based on low stock and sales velocity, dead stock tying up capital, and loading supplier invoices or delivery notes into stock. |
 | "¿Qué productos tienen mal margen?" / "Aumentá un 8%" | Finds missing costs and low or negative margins, and proposes per-product price changes. |
 | "¿Quién me debe?" | Fiado (store credit) outstanding, aging, collection priorities and ready-to-send reminder messages. |
+| "Anotá que pagué la luz" / "El alquiler son $350.000 por mes" | Records one-time and recurring expenses (gastos) so net profit reflects them. |
 
-Claude always shows you the exact changes and asks before it writes anything to Flik (prices, stock, clients, sales).
+Claude always shows you the exact changes and asks before it writes anything to Flik (prices, stock, clients, sales, expenses).
 
 ## Install
 
@@ -30,7 +31,7 @@ Then ask something like *"¿cómo vengo esta semana?"*. If your account has seve
 ## What's inside
 
 - **Connector**: the Flik MCP server at `https://miflik.com/api/mcp`, which uses OAuth sign-in on miflik.com. The plugin contains no keys or credentials.
-- **Skills**: `flik-setup`, `business-health`, `stock-reorder`, `pricing-margins`, `receivables`. You can call them directly, e.g. `/flik:business-health semana`.
+- **Skills**: `flik-setup`, `business-health`, `stock-reorder`, `pricing-margins`, `receivables`, `expenses`. You can call them directly, e.g. `/flik:business-health semana`.
 
 ## Privacy
 
