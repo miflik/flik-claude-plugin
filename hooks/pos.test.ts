@@ -3,8 +3,10 @@ import type { Engine } from 'claude-code/testing'
 import type { EngineInterface, McpToolResult, On } from 'claude-code'
 
 import {
+  barcodeOf,
   cartTotals,
   checkoutItems,
+  compileBarcodePattern,
   money,
   parseClients,
   parseDiscount,
@@ -60,6 +62,17 @@ function fakeFlik(on: On, options: { textOnly?: boolean; buildError?: string } =
               },
             }
       case 'search_products':
+        if (e.args.q === '7790001234567') {
+          return {
+            ...text('Found 1 product'),
+            structuredContent: {
+              query: '7790001234567',
+              found: 1,
+              page: 1,
+              hits: [{ productId: 'p1', name: 'GALLETAS LINCOLN', price: 1700, stock: 4, barcode: '7790001234567', sku: null, isActive: true }],
+            },
+          }
+        }
         return options.textOnly
           ? text(
               'Found 2 products matching "galle" for business "Point":\n\n' +
@@ -122,6 +135,19 @@ async function mountWithBusiness($: Engine, surface: (typeof SURFACES)[number]) 
 
   return pane
 }
+
+test('barcode recognition', () => {
+  const pattern = compileBarcodePattern(undefined)
+
+  expect(barcodeOf('7790001234567', pattern)).toBe('7790001234567')
+  expect(barcodeOf('  77900012\r\n', pattern)).toBe('77900012')
+  expect(barcodeOf('1234', pattern)).toBeNull()
+  expect(barcodeOf('7790001234567 x2', pattern)).toBeNull()
+  expect(barcodeOf('hola', pattern)).toBeNull()
+  expect(barcodeOf('A-7790', compileBarcodePattern('^A-\\d+$'))).toBe('A-7790')
+  // A broken option falls back to the default instead of disabling scanning.
+  expect(barcodeOf('7790001234567', compileBarcodePattern('['))).toBe('7790001234567')
+})
 
 test('pure helpers: money, numbers, discounts, args', () => {
   expect(money(1234.5)).toBe('$1.234,50')
@@ -307,4 +333,73 @@ test('checkoutItems sends an override only where the price differs', () => {
     { product: 'a', quantity: 1 },
     { product: 'b', quantity: 2, price: 8 },
   ])
+})
+
+/** The engine's own bottom for prompts: the prompt enters as typed. */
+function promptBottom(on: On) {
+  on('prompt.submit', (_: EngineInterface, e: { text: string }) => ({ text: e.text }))
+}
+
+test('a barcode scanned at the prompt opens the pane and adds the product', async ($, on) => {
+  mock.store(on)
+  promptBottom(on)
+  const calls = fakeFlik(on)
+  const opens: string[] = []
+
+  on('ui.open', (_: EngineInterface, e: { id: string }) => {
+    opens.push(e.id)
+
+    return { value: { isPlaced: true as const } }
+  })
+  const pane = await mountWithBusiness($, 'terminal')
+
+  const result = await $.prompt.submit({ text: '7790001234567', origin: { kind: 'composer' }, wait: false })
+
+  expect(result.drop).toBe('Escaneado 7790001234567 · Agregado: GALLETAS LINCOLN')
+  expect(opens).toEqual(['flik-pos'])
+  expect(calls.at(-1)).toEqual({ tool: 'search_products', args: { business_id: 'biz1', q: '7790001234567', limit: 9 } })
+  expect(await pane.find({ type: 'Text', text: /Total \$1\.700,00/ })).toBeDefined()
+
+  // A second scan of the same code bumps the quantity; the pane is open now.
+  await $.prompt.submit({ text: '7790001234567', origin: { kind: 'composer' }, wait: false })
+  expect(opens).toEqual(['flik-pos'])
+  expect(await pane.find({ type: 'Text', text: /Total \$3\.400,00/ })).toBeDefined()
+  await pane.unmount()
+})
+
+test('a prompt that is not a barcode reaches the model untouched', async ($, on) => {
+  mock.store(on)
+  promptBottom(on)
+  const calls = fakeFlik(on)
+
+  for (const text of ['hola', '1234', '7790001234567 x2', 'vendí 7790001234567']) {
+    expect(await $.prompt.submit({ text, origin: { kind: 'composer' }, wait: false })).toEqual({ text })
+  }
+  // A delivery that happens to be digits is never a scan.
+  expect(await $.prompt.submit({ text: '7790001234567', origin: { kind: 'task-notification' } as never, wait: false })).toEqual({ text: '7790001234567' })
+  expect(calls).toHaveLength(0)
+})
+
+test('scanFromPrompt=false lets a barcode through to the model', { options: { scanFromPrompt: false } }, async ($, on) => {
+  mock.store(on)
+  promptBottom(on)
+  const calls = fakeFlik(on)
+
+  expect(await $.prompt.submit({ text: '7790001234567', origin: { kind: 'composer' }, wait: false })).toEqual({ text: '7790001234567' })
+  expect(calls).toHaveLength(0)
+})
+
+test('a digit submitted in Buscar picks that hit', async ($, on) => {
+  mock.store(on)
+  fakeFlik(on)
+  const pane = await mountWithBusiness($, 'terminal')
+
+  await pane.input({ key: 'q', text: 'galle' })
+  expect(await pane.find({ key: 'hit-1', text: /2: GALLETITAS AGUA/ })).toBeDefined()
+  await pane.input({ key: 'q', text: '2' })
+  expect(await pane.find({ type: 'Text', text: /Total \$900,00/ })).toBeDefined()
+  expect(await pane.find({ key: 'hit-1' })).toBeUndefined()
+  // No digit hotkeys are left for a scan's digits to press.
+  for (const b of await pane.findAll({ type: 'Button' })) expect(b.props.hotkey).not.toMatch(/^\d$/)
+  await pane.unmount()
 })

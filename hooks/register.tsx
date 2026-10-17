@@ -6,10 +6,12 @@ import {
   HELP_TEXT,
   PAYMENT_METHODS,
   addHit,
+  barcodeOf,
   cartTotals,
   changeQuantity,
   checkoutItems,
   checkoutProblem,
+  compileBarcodePattern,
   describeParked,
   money,
   newTab,
@@ -47,6 +49,10 @@ async function resolveFlik($: Dollar): Promise<string> {
 }
 const MAX_HITS = 9
 
+// Scanner options, set from `userConfig` each time register() runs.
+let barcodePattern = compileBarcodePattern(undefined)
+let scanFromPrompt = true
+
 const first = newTab()
 const business = atom({ plugin: 'flik', key: 'business' } as const, null)
 const cart = atom({ plugin: 'flik', key: 'cart' } as const, {
@@ -57,6 +63,7 @@ const parked = atom({ plugin: 'flik', key: 'parked' } as const, [])
 const ui = atom({ plugin: 'flik', key: 'ui' } as const, {
   view: 'cart',
   status: null,
+  isOpen: false,
   editIndex: null,
   isDiscountOpen: false,
   search: { query: '', hits: [] },
@@ -155,19 +162,35 @@ async function chooseBusiness($: Dollar, chosen: PosBusiness): Promise<void> {
   await syncStatus($)
 }
 
-async function search($: Dollar, query: string): Promise<void> {
+/** What a search did: a line added outright, hits shown, or nothing found. */
+type SearchOutcome = { kind: 'added'; name: string } | { kind: 'hits'; count: number } | { kind: 'none' }
+
+async function search($: Dollar, query: string): Promise<SearchOutcome> {
   const q = query.trim()
   const biz = await read($, business)
+  const view = await read($, ui)
 
   if (q === '') {
     await setUi($, { search: { query: '', hits: [] } })
 
-    return
+    return { kind: 'none' }
+  }
+
+  // A single digit while hits are shown picks that hit: the keyboard never
+  // leaves the field, which is what a scanner-driven counter needs.
+  if (/^[1-9]$/.test(q) && view.search.hits.length > 0) {
+    const hit = view.search.hits[Number(q) - 1]
+
+    if (hit) {
+      await addToCart($, hit)
+
+      return { kind: 'added', name: hit.name }
+    }
   }
   if (!biz) {
     await loadBusinesses($)
 
-    return
+    return { kind: 'none' }
   }
 
   const result = await callFlik(
@@ -177,19 +200,61 @@ async function search($: Dollar, query: string): Promise<void> {
     `Buscando "${q}"…`,
   )
 
-  if (!result) return
+  if (!result) return { kind: 'none' }
   const hits = parseSearchHits(result)
 
   // A scanned barcode resolves to one product: straight into the cart.
-  if (hits.length === 1 && /^\d{6,}$/.test(q)) {
-    await updateTab($, tab => ({ ...tab, items: addHit(tab.items, hits[0]!) }))
-    await setUi($, { search: { query: '', hits: [] } })
+  if (hits.length === 1 && barcodeOf(q, barcodePattern) !== null) {
+    await addToCart($, hits[0]!)
 
-    return
+    return { kind: 'added', name: hits[0]!.name }
   }
 
   await setUi($, { search: { query: q, hits } })
-  if (hits.length === 0) await setStatus($, { kind: 'info', text: `Sin resultados para "${q}".` })
+  if (hits.length === 0) {
+    await setStatus($, { kind: 'info', text: `Sin resultados para "${q}".` })
+
+    return { kind: 'none' }
+  }
+
+  return { kind: 'hits', count: hits.length }
+}
+
+async function addToCart($: Dollar, hit: { productId: string; name: string; price: number; stock: number | null }): Promise<void> {
+  await updateTab($, tab => ({ ...tab, items: addHit(tab.items, hit) }))
+  await setUi($, { search: { query: '', hits: [] } })
+  // Back to the search field; a surface that cannot move the ring is fine.
+  $.ui.focus({ requestId: PANE, key: 'q' }).catch(() => undefined)
+}
+
+/**
+ * A barcode that arrived outside the search field (the prompt): back to the
+ * cart view if a sale just finished, then the same lookup the field does.
+ */
+async function scan($: Dollar, code: string): Promise<string> {
+  const view = await read($, ui)
+
+  if (view.view !== 'cart') await setUi($, { view: 'cart', lastSale: null })
+  const outcome = await search($, code)
+
+  if (outcome.kind === 'added') return `Agregado: ${outcome.name}`
+  if (outcome.kind === 'none') return `Sin resultados para ${code}`
+
+  return `${outcome.count} productos para ${code}: elegí uno en la caja`
+}
+
+async function openPane($: Dollar, focus: boolean): Promise<{ isPlaced: boolean; reason?: string }> {
+  const opened = await $.ui.open({
+    id: PANE,
+    title: 'Flik POS',
+    ...(focus ? { focus: true as const } : {}),
+    rows: 28,
+    columns: 60,
+  })
+
+  await setUi($, { isOpen: true })
+
+  return opened
 }
 
 async function searchClients($: Dollar, query: string): Promise<void> {
@@ -334,7 +399,10 @@ async function checkout($: Dollar): Promise<void> {
   })
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  barcodePattern = compileBarcodePattern(options.barcodePattern)
+  scanFromPrompt = options.scanFromPrompt !== false
+
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'pos',
@@ -370,7 +438,7 @@ export const register: Register = on => {
       case 'resume': {
         const text = await resumeParked($, command.index)
 
-        await $.ui.open({ id: PANE, title: 'Flik POS', focus: true, rows: 28, columns: 60 })
+        await openPane($, true)
 
         return { text }
       }
@@ -384,13 +452,7 @@ export const register: Register = on => {
         return { text: 'Caja cerrada.' }
       case 'business':
       case 'open': {
-        const opened = await $.ui.open({
-          id: PANE,
-          title: 'Flik POS',
-          focus: true,
-          rows: 28,
-          columns: 60,
-        })
+        const opened = await openPane($, true)
 
         if (!opened.isPlaced) {
           return { text: `No se pudo abrir la caja: ${opened.reason}` }
@@ -399,16 +461,35 @@ export const register: Register = on => {
           await loadBusinesses($)
         }
 
-        return { text: 'Caja abierta. Escribí para buscar; c cobra, d descuento, l cliente, h guarda.' }
+        return {
+          text: 'Caja abierta. Escribí o escaneá para buscar (un dígito elige el resultado); c cobra, d descuento, l cliente, h guarda.',
+        }
       }
     }
   })
 
-  on('ui.close', { id: PANE }, ($, e, next) => {
+  on('ui.close', { id: PANE }, async ($, e, next) => {
     $.ui.status(undefined)
+    await setUi($, { isOpen: false })
 
     return next(e)
   })
+
+  // A keyboard-wedge scanner types the code and presses Enter wherever the
+  // keyboard is. Landing in the prompt, that would be a message to the model;
+  // a barcode-shaped prompt from the person is a scan for the cart instead.
+  on('prompt.submit', async ($, e, next) => {
+    const code = scanFromPrompt && isPersonsOwn(e.origin) ? barcodeOf(e.text, barcodePattern) : null
+
+    if (code === null) return next(e)
+
+    const view = await read($, ui)
+
+    if (!view.isOpen) await openPane($, false)
+
+    // Awaited, so the reason shown in place of the prompt is the outcome.
+    return { drop: `Escaneado ${code} · ${await scan($, code)}` }
+  }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const biz = await read($, business)
@@ -456,7 +537,6 @@ export const register: Register = on => {
             <Button
               key={`biz-${i}`}
               plain
-              hotkey={i < 9 ? String(i + 1) : undefined}
               onPress={() => void chooseBusiness($, b)}
             >
               {b.name} <Text dimColor>{b.id}</Text>
@@ -507,7 +587,6 @@ export const register: Register = on => {
             <Button
               key={`parked-${i}`}
               plain
-              hotkey={i < 9 ? String(i + 1) : undefined}
               onPress={() => void resumeParked($, i)}
             >
               {p.label} <Text dimColor>{p.items.length} ít · {money(cartTotals(p).total)}</Text>
@@ -536,7 +615,6 @@ export const register: Register = on => {
             <Button
               key={`client-${i}`}
               plain
-              hotkey={i < 9 ? String(i + 1) : undefined}
               onPress={() => {
                 void updateTab($, t => ({ ...t, clientId: c.clientId, clientName: c.name })).then(() =>
                   setUi($, { view: 'cart', clients: { query: '', hits: [] } }),
@@ -604,25 +682,15 @@ export const register: Register = on => {
         <Input
           key="q"
           label="Buscar"
-          placeholder="nombre, código de barras o SKU"
+          placeholder="nombre, código o SKU · escaneá acá"
           value={view.search.query}
           autoFocus
           submitLabel="buscar"
           onSubmit={value => void search($, value)}
         />
         {view.search.hits.map((hit, i) => (
-          <Button
-            key={`hit-${i}`}
-            plain
-            hotkey={String(i + 1)}
-            onPress={() => {
-              void updateTab($, t => ({ ...t, items: addHit(t.items, hit) })).then(() =>
-                setUi($, { search: { query: '', hits: [] } }),
-              )
-              // Back to the search field; a surface that cannot move the ring is fine.
-              $.ui.focus({ requestId: PANE, key: 'q' }).catch(() => undefined)
-            }}
-          >
+          <Button key={`hit-${i}`} plain onPress={() => void addToCart($, hit)}>
+            <Text dimColor>{i + 1}: </Text>
             {truncate(hit.name, nameWidth)} <Text dimColor>{money(hit.price)}</Text>
             {hit.stock !== null && (
               <Text color={hit.stock <= 0 ? 'error' : 'subtle'}> st {hit.stock}</Text>
@@ -765,4 +833,9 @@ async function addTab($: Dollar): Promise<void> {
   const next = await update($, cart, s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id }))
 
   await syncStatus($, next)
+}
+
+/** The person's own prompt (typed, or from the phone bridge): never a delivery or a timer's. */
+function isPersonsOwn(origin: { kind: string } | undefined): boolean {
+  return origin === undefined || origin.kind === 'composer' || origin.kind === 'bridge' || origin.kind === 'unclassified'
 }

@@ -24,6 +24,8 @@ In Claude Code the plugin also adds a cashier pane. Type `/pos` to open it besid
 /pos business        switch business
 ```
 
+**Barcode scanners.** A USB/Bluetooth keyboard-wedge scanner works out of the box. Set its suffix to **Enter / CR** (most scanners have a setup barcode for this in their manual; a Tab suffix will not work — to check, scan into any text editor: Enter starts a new line). Then scan either into the pane's `Buscar` field or straight at the Claude prompt: a digits-only message is treated as a scan, the pane opens if it was closed, and the product is added to the cart instead of being sent to Claude. While results are listed, typing a single digit and Enter picks that result, so the keyboard never has to leave the field. Two options under `/config` → Flik: **Scan barcodes at the prompt** (turn off to send digit-only messages to Claude) and **Barcode pattern** (a regex; the default covers EAN-8/UPC-A/EAN-13/ITF-14 — widen it if your scanner adds a prefix or suffix).
+
 ## Install
 
 ### Claude desktop, Cowork and claude.ai

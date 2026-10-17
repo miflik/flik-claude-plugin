@@ -1,7 +1,7 @@
 {
   "name": "flik",
   "displayName": "Flik POS",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Manage and optimize your Flik point-of-sale business from Claude: sales and profit reports, stock and reordering, pricing and margins, client debt (fiado), expenses, and a /pos cashier pane to sell from Claude Code.",
   "author": {
     "name": "Flik",
@@ -18,5 +18,19 @@
     "flik",
     "punto-de-venta"
   ],
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "scanFromPrompt": {
+      "type": "boolean",
+      "title": "Scan barcodes at the prompt",
+      "description": "Treat a barcode-shaped message typed at the prompt (digits only, as a keyboard-wedge scanner sends) as a scan: open /pos and add the product instead of sending it to Claude.",
+      "default": true
+    },
+    "barcodePattern": {
+      "type": "string",
+      "title": "Barcode pattern",
+      "description": "Regex a scan must match. The default covers EAN-8, UPC-A, EAN-13 and ITF-14; widen it if your scanner adds a prefix or suffix.",
+      "default": "^\\d{6,14}$"
+    }
+  }
 }

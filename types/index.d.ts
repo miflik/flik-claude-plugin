@@ -42,6 +42,8 @@ export type PosCart = { tabs: PosTab[]; activeTabId: string }
 export type PosUi = {
   view: PosView
   status: PosStatus
+  /** Whether the pane is open; kept here (not $.ui.panes) so a reload and the test kit agree. */
+  isOpen: boolean
   /** Which cart line's price is being edited, if any. */
   editIndex: number | null
   isDiscountOpen: boolean

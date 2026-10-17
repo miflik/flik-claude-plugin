@@ -112,6 +112,32 @@ export function parseDiscount(text: string): PosDiscount | { error: string } {
   return { type: isPercent ? 'percent' : 'amount', value }
 }
 
+/** EAN-8, UPC-A, EAN-13 and ITF-14: what a retail keyboard-wedge scanner types. */
+export const DEFAULT_BARCODE_PATTERN = '^\\d{6,14}$'
+
+/** The user's `barcodePattern` option, or the default when it is not a regex. */
+export function compileBarcodePattern(source: unknown): RegExp {
+  if (typeof source === 'string' && source.trim() !== '') {
+    try {
+      return new RegExp(source.trim())
+    } catch {
+      // Fall through to the default: a bad option must not disable scanning.
+    }
+  }
+
+  return new RegExp(DEFAULT_BARCODE_PATTERN)
+}
+
+/**
+ * The barcode a scan typed, or null when the text is anything else. A wedge
+ * may leave a CR/LF before the Enter it sends; both are stripped first.
+ */
+export function barcodeOf(text: string, pattern: RegExp): string | null {
+  const code = text.replace(/[\r\n]+$/, '').trim()
+
+  return code !== '' && pattern.test(code) ? code : null
+}
+
 export function addHit(items: PosLine[], hit: PosHit): PosLine[] {
   const index = items.findIndex(l => l.productId === hit.productId)
 
