@@ -9,7 +9,7 @@
     {
       "name": "flik",
       "displayName": "Flik POS",
-      "description": "Manage and optimize your Flik point-of-sale business from Claude.",
+      "description": "Manage and optimize your Flik point-of-sale business from Claude, and sell from a /pos cashier pane in Claude Code.",
       "source": "./"
     }
   ]
