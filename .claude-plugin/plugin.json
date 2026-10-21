@@ -1,8 +1,8 @@
 {
   "name": "flik",
   "displayName": "Flik POS",
-  "version": "0.3.1",
-  "description": "Manage and optimize your Flik point-of-sale business from Claude: sales and profit reports, stock and reordering, pricing and margins, client debt (fiado), expenses, and a /pos cashier pane to sell from Claude Code.",
+  "version": "0.4.0",
+  "description": "Manage and optimize your Flik point-of-sale business from Claude: sales and profit reports, stock and reordering, pricing and margins, client debt (fiado), expenses, shelf-check tasks (stock + expiry), and a /pos cashier pane to sell from Claude Code.",
   "author": {
     "name": "Flik",
     "url": "https://miflik.com"
@@ -18,7 +18,6 @@
     "flik",
     "punto-de-venta"
   ],
-  "types": "./types/index.d.ts",
   "userConfig": {
     "scanFromPrompt": {
       "type": "boolean",
