@@ -3,6 +3,11 @@
     "flik": {
       "type": "http",
       "url": "https://miflik.com/api/mcp"
+    },
+    "matias-test": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/servers/matias-test.mjs"]
     }
   }
 }
