@@ -52,7 +52,7 @@ Then ask something like *"¿cómo vengo esta semana?"*. If your account has seve
 
 The `/pos` mod (`hooks/register.tsx`) runs no shell commands, starts no processes, spawns no agents and fetches no URLs. Its only way out is `$.mcp.call`, which calls a tool on the Flik MCP server bundled in `.mcp.json` (`https://miflik.com/api/mcp`, run by Claude Code as `plugin:flik:flik`). If that server is not connected in the session, it uses the **claude.ai Flik** connector instead, which is the same Flik server reached through claude.ai. The call goes through Claude Code's MCP client with the OAuth sign-in you already gave the connector. The mod adds no credentials of its own, and nothing is sent to Claude or to any other host.
 
-The tool name in that call is one of five, and each one runs only when you act in the pane:
+Every `$.mcp.call` in `hooks/register.tsx` names its tool as fixed text at the call: there are exactly five, all on the Flik server, listed below. The mod calls no shell, agent or other tool. The server argument is one of two values: the bundled `flik` server, under the name Claude Code reports for it from `$.mcp.connect('flik')` (normally `plugin:flik:flik`), or the fixed fallback `claude.ai Flik`. Each tool runs only when you act in the pane:
 
 | Tool | When | What it sends to Flik |
 |---|---|---|
@@ -71,7 +71,9 @@ The tool name in that call is one of five, and each one runs only when you act i
 - `prompt.submit`: looks at each prompt you type. If **Scan barcodes at the prompt** is on and the whole prompt matches **Barcode pattern** (digits only, by default), the mod keeps that prompt from reaching Claude, opens the pane, and looks the code up with `search_products` as described above. Every other prompt passes through unchanged and is not stored or sent anywhere by the mod. Prompts sent by timers or other sessions are always passed through.
 - `ui.render` and `ui.close` for the pane: draw it and clear its status line.
 
-The chosen business and parked carts are kept in `$.store` so they survive a restart. They are never sent anywhere except as the arguments listed above.
+The chosen business and parked carts are kept in `$.store` so they survive a restart. What is read back from there and leaves the machine is limited to the arguments in the table above: the saved business's `id` (sent as `business_id`), and, for a parked cart you resume and then charge with `c`, its product ids, quantities, price overrides, client id and discount (sent with `build_sale`). The business name, cart labels and everything else in `$.store` stay on your machine.
+
+**Local code.** The plugin starts no local processes and bundles no local MCP servers: its only server is the remote HTTP one in `.mcp.json`. The only code Claude Code runs from it is the `/pos` mod in `hooks/`.
 
 ## Privacy
 

@@ -109,12 +109,16 @@ async function syncStatus($: Dollar, state?: PosCart): Promise<void> {
   )
 }
 
-/** One MCP call with the busy flag around it; an error becomes a status line. */
+/**
+ * One MCP call with the busy flag around it; an error becomes a status line.
+ * Each caller names its Flik tool as fixed text in its own `$.mcp.call`;
+ * `label` only labels the error.
+ */
 async function callFlik(
   $: Dollar,
-  tool: string,
-  args: Record<string, unknown>,
+  label: string,
   busy: string,
+  call: (server: string) => Promise<unknown>,
 ): Promise<ToolResult | null> {
   const state = await read($, ui)
 
@@ -122,10 +126,10 @@ async function callFlik(
   await setStatus($, { kind: 'busy', text: busy })
 
   try {
-    const result = (await $.mcp.call(await resolveFlik($), tool, args)) as ToolResult
+    const result = (await call(await resolveFlik($))) as ToolResult
 
     if (result.isError) {
-      await setStatus($, { kind: 'error', text: textOf(result) || `${tool} falló` })
+      await setStatus($, { kind: 'error', text: textOf(result) || `${label} falló` })
 
       return null
     }
@@ -135,7 +139,7 @@ async function callFlik(
   } catch (error) {
     await setStatus($, {
       kind: 'error',
-      text: `${tool}: ${error instanceof Error ? error.message : String(error)}`,
+      text: `${label}: ${error instanceof Error ? error.message : String(error)}`,
     })
 
     return null
@@ -144,7 +148,9 @@ async function callFlik(
 
 async function loadBusinesses($: Dollar): Promise<void> {
   await setUi($, { view: 'business' })
-  const result = await callFlik($, 'list_businesses', {}, 'Cargando negocios…')
+  const result = await callFlik($, 'list_businesses', 'Cargando negocios…', server =>
+    $.mcp.call(server, 'list_businesses', {}),
+  )
 
   if (!result) return
   const businesses = parseBusinesses(result)
@@ -193,11 +199,8 @@ async function search($: Dollar, query: string): Promise<SearchOutcome> {
     return { kind: 'none' }
   }
 
-  const result = await callFlik(
-    $,
-    'search_products',
-    { business_id: biz.id, q, limit: MAX_HITS },
-    `Buscando "${q}"…`,
+  const result = await callFlik($, 'search_products', `Buscando "${q}"…`, server =>
+    $.mcp.call(server, 'search_products', { business_id: biz.id, q, limit: MAX_HITS }),
   )
 
   if (!result) return { kind: 'none' }
@@ -262,11 +265,12 @@ async function searchClients($: Dollar, query: string): Promise<void> {
 
   if (!biz) return
   const q = query.trim()
-  const result = await callFlik(
-    $,
-    'list_clients',
-    { business_id: biz.id, limit: MAX_HITS, ...(q ? { search: q } : {}) },
-    'Buscando clientes…',
+  const result = await callFlik($, 'list_clients', 'Buscando clientes…', server =>
+    $.mcp.call(server, 'list_clients', {
+      business_id: biz.id,
+      limit: MAX_HITS,
+      ...(q ? { search: q } : {}),
+    }),
   )
 
   if (!result) return
@@ -351,17 +355,14 @@ async function checkout($: Dollar): Promise<void> {
   }
 
   const { total } = cartTotals(tab)
-  const built = await callFlik(
-    $,
-    'build_sale',
-    {
+  const built = await callFlik($, 'build_sale', 'Armando la venta…', server =>
+    $.mcp.call(server, 'build_sale', {
       business_id: biz.id,
       paymentMethod: tab.paymentMethod,
       items: checkoutItems(tab),
       ...(tab.clientId ? { client_id: tab.clientId } : {}),
       ...(tab.discount ? { discount: tab.discount } : {}),
-    },
-    'Armando la venta…',
+    }),
   )
 
   if (!built) return
@@ -378,11 +379,8 @@ async function checkout($: Dollar): Promise<void> {
     return
   }
 
-  const done = await callFlik(
-    $,
-    'complete_sale',
-    { business_id: biz.id, ...(token ? { token } : {}) },
-    'Cobrando…',
+  const done = await callFlik($, 'complete_sale', 'Cobrando…', server =>
+    $.mcp.call(server, 'complete_sale', { business_id: biz.id, ...(token ? { token } : {}) }),
   )
 
   if (!done) return
